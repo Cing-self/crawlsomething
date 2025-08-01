@@ -32,11 +32,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # 复制应用代码
 COPY . .
 
-# 创建日志目录
-RUN mkdir -p /app/logs
-
-# 创建非root用户
+# 创建非root用户和日志目录
 RUN useradd --create-home --shell /bin/bash app \
+    && mkdir -p /app/logs \
     && chown -R app:app /app
 USER app
 
