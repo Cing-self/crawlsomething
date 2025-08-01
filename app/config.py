@@ -56,7 +56,7 @@ class Settings(BaseSettings):
     redoc_url: str = Field(default="/redoc", description="ReDoc文档URL")
     
     # 日志配置
-    log_level: str = Field(default="INFO", description="日志级别")
+    log_level: str = Field(default="info", description="日志级别")
     log_file: str = Field(default="logs/app.log", description="日志文件路径")
     log_rotation: str = Field(default="1 day", description="日志轮转周期")
     log_retention: str = Field(default="30 days", description="日志保留时间")

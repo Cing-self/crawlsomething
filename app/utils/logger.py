@@ -33,7 +33,7 @@ def setup_logger(
         retention: 日志保留时间，默认从配置读取
     """
     # 使用配置中的默认值
-    log_level = log_level or settings.log_level
+    log_level = (log_level or settings.log_level).upper()
     log_file = log_file or settings.log_file
     rotation = rotation or settings.log_rotation
     retention = retention or settings.log_retention
