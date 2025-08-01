@@ -1,0 +1,24 @@
+# Web框架和服务器
+fastapi
+uvicorn
+
+# HTTP客户端和爬虫
+aiohttp
+beautifulsoup4
+requests
+
+# 数据验证和序列化
+pydantic
+pydantic-settings
+
+# 日志
+loguru
+
+# 环境变量管理
+python-dotenv
+
+# 时间处理
+python-dateutil
+
+# HTTP状态码
+httpx
