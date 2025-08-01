@@ -251,9 +251,9 @@ EOF
 check_docker_compose_installation() {
     log_info "检查Docker Compose安装状态..."
     
-    # 检查docker-compose命令是否存在
-    if command -v docker-compose &> /dev/null; then
-        COMPOSE_VERSION=$(docker-compose --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+    # 检查docker compose命令是否存在
+if command -v docker &> /dev/null && docker compose version &> /dev/null; then
+    COMPOSE_VERSION=$(docker compose version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
         if [[ -n "$COMPOSE_VERSION" ]]; then
             log_success "Docker Compose已安装，版本: $COMPOSE_VERSION"
             return 0
@@ -303,7 +303,7 @@ install_docker_compose() {
     done
     
     # 检查下载是否成功
-    if [[ ! -f /usr/local/bin/docker-compose ]]; then
+    if [[ ! -f /usr/local/bin/docker-compose ]] && ! (command -v docker &> /dev/null && docker compose version &> /dev/null); then
         log_error "Docker Compose下载失败"
         exit 1
     fi
@@ -522,22 +522,34 @@ deploy_app() {
     
     # 停止现有服务
     if [[ -f docker-compose.prod.yml ]]; then
-        docker-compose -f docker-compose.prod.yml down 2>/dev/null || true
+        if command -v docker-compose &> /dev/null; then
+            docker-compose -f docker-compose.prod.yml down 2>/dev/null || true
+        else
+            docker compose -f docker-compose.prod.yml down 2>/dev/null || true
+        fi
     fi
     
     # 构建并启动服务
-    docker-compose -f docker-compose.prod.yml up -d --build
+    if command -v docker-compose &> /dev/null; then
+        docker-compose -f docker-compose.prod.yml up -d --build
+    else
+        docker compose -f docker-compose.prod.yml up -d --build
+    fi
     
     # 等待服务启动
     log_info "等待服务启动..."
     sleep 30
     
     # 检查服务状态
-    if docker-compose -f docker-compose.prod.yml ps | grep -q "Up"; then
+    if (command -v docker-compose &> /dev/null && docker-compose -f docker-compose.prod.yml ps | grep -q "Up") || (docker compose -f docker-compose.prod.yml ps | grep -q "Up"); then
         log_success "应用部署成功"
     else
         log_error "应用部署失败，请检查日志"
-        docker-compose -f docker-compose.prod.yml logs
+        if command -v docker-compose &> /dev/null; then
+            docker-compose -f docker-compose.prod.yml logs
+        else
+            docker compose -f docker-compose.prod.yml logs
+        fi
         exit 1
     fi
 }
@@ -547,7 +559,11 @@ show_info() {
     log_success "=== 部署完成 ==="
     echo
     log_info "服务状态:"
-    docker-compose -f docker-compose.prod.yml ps
+    if command -v docker-compose &> /dev/null; then
+        docker-compose -f docker-compose.prod.yml ps
+    else
+        docker compose -f docker-compose.prod.yml ps
+    fi
     echo
     log_info "访问地址:"
     echo "  HTTP:  http://$(curl -s ifconfig.me)"
@@ -558,9 +574,9 @@ show_info() {
     log_info "API文档: http://$(curl -s ifconfig.me)/docs"
     echo
     log_info "常用命令:"
-    echo "  查看日志: docker-compose -f docker-compose.prod.yml logs -f"
-    echo "  重启服务: docker-compose -f docker-compose.prod.yml restart"
-    echo "  停止服务: docker-compose -f docker-compose.prod.yml down"
+    echo "  查看日志: docker compose -f docker-compose.prod.yml logs -f"
+    echo "  重启服务: docker compose -f docker-compose.prod.yml restart"
+    echo "  停止服务: docker compose -f docker-compose.prod.yml down"
     echo
 }
 
