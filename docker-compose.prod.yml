@@ -1,0 +1,93 @@
+version: '3.8'
+
+services:
+  # GitHub Trending 爬虫 API 服务
+  crawlsomething:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: github-trending-crawler
+    environment:
+      - ENV=production
+      - HOST=0.0.0.0
+      - PORT=8000
+      - LOG_LEVEL=info
+      - WORKERS=2  # 根据服务器配置调整
+    volumes:
+      - ./logs:/app/logs  # 日志持久化
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - crawler-network
+    # 安全配置：不暴露端口到主机
+    expose:
+      - "8000"
+
+  # Nginx反向代理（生产环境必需）
+  nginx:
+    image: nginx:alpine
+    container_name: nginx-proxy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro  # SSL证书目录
+      - ./logs/nginx:/var/log/nginx  # Nginx日志持久化
+    depends_on:
+      - crawlsomething
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    networks:
+      - crawler-network
+
+  # 日志收集器（可选）
+  logrotate:
+    image: alpine:latest
+    container_name: log-rotator
+    volumes:
+      - ./logs:/logs
+    command: >
+      sh -c "while true; do
+        find /logs -name '*.log' -size +100M -exec truncate -s 0 {} \;
+        sleep 3600
+      done"
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.1'
+          memory: 32M
+
+networks:
+  crawler-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  logs:
+    driver: local
+  ssl:
+    driver: local

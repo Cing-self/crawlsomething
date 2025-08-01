@@ -1,0 +1,27 @@
+# GitHub Trending Crawler API - 简化版Docker Compose配置
+# 仅部署API服务，适合快速启动和测试
+
+version: '3.8'
+
+services:
+  # GitHub Trending爬虫API服务
+  crawlsomething:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: github-trending-crawler
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONPATH=/app
+      - LOG_LEVEL=INFO
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+# 使用方法：
+# docker-compose -f docker-compose.simple.yml up -d

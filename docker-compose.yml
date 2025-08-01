@@ -1,0 +1,62 @@
+# GitHub Trending Crawler API - Docker Compose配置文件
+# 提供完整的容器化部署解决方案
+
+version: '3.8'
+
+services:
+  # GitHub Trending爬虫API服务
+  crawlsomething:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: github-trending-crawler
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONPATH=/app
+      - LOG_LEVEL=INFO
+    volumes:
+      # 挂载日志目录（可选）
+      - ./logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - crawler-network
+
+  # Nginx反向代理（生产环境推荐）
+  nginx:
+    image: nginx:alpine
+    container_name: nginx-proxy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro  # SSL证书目录（HTTPS必需）
+      - ./logs/nginx:/var/log/nginx  # Nginx日志持久化
+    depends_on:
+      - crawlsomething
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    networks:
+      - crawler-network
+
+networks:
+  crawler-network:
+    driver: bridge
+
+volumes:
+  logs:
+    driver: local
