@@ -60,9 +60,20 @@ def setup_logger(
     
     # 添加文件日志处理器
     if log_file:
-        # 确保日志目录存在
+        # 确保日志目录存在并设置正确权限
         log_path = Path(log_file)
         log_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # 设置日志目录权限（确保当前用户可写）
+        try:
+            import stat
+            os.chmod(log_path.parent, stat.S_IRWXU | stat.S_IRWXG | stat.S_IROTH | stat.S_IXOTH)
+            # 如果日志文件已存在，也设置其权限
+            if log_path.exists():
+                os.chmod(log_path, stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IWGRP | stat.S_IROTH)
+        except (OSError, PermissionError) as e:
+            # 如果权限设置失败，记录警告但继续执行
+            print(f"Warning: Failed to set log directory permissions: {e}")
         
         file_format = (
             "{time:YYYY-MM-DD HH:mm:ss.SSS} | "
