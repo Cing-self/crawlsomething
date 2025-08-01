@@ -23,11 +23,21 @@ RUN if [ -f /etc/apt/sources.list ]; then \
         find /etc/apt/sources.list.d -name "*.list" -exec sed -i 's/security.debian.org/mirrors.aliyun.com/g' {} \; ; \
     fi
 
-# 安装系统依赖
-RUN apt-get update && apt-get install -y \
-    gcc \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
+# 安装系统依赖（添加重试机制和多个镜像源备选）
+RUN for i in 1 2 3; do \
+        apt-get update && apt-get install -y \
+            gcc \
+            curl \
+        && rm -rf /var/lib/apt/lists/* && break || \
+        (echo "Attempt $i failed, trying alternative sources..." && \
+         if [ -f /etc/apt/sources.list ]; then \
+             sed -i 's/mirrors.aliyun.com/mirrors.tuna.tsinghua.edu.cn/g' /etc/apt/sources.list; \
+         fi && \
+         if [ -d /etc/apt/sources.list.d ]; then \
+             find /etc/apt/sources.list.d -name "*.list" -exec sed -i 's/mirrors.aliyun.com/mirrors.tuna.tsinghua.edu.cn/g' {} \; ; \
+         fi && \
+         sleep 5); \
+    done
 
 # 复制依赖文件
 COPY requirements.txt .
