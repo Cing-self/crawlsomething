@@ -10,8 +10,7 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
+    PIP_DISABLE_PIP_VERSION_CHECK=1
 
 # 更换为阿里云镜像源以提高下载速度（兼容新版Debian）
 RUN if [ -f /etc/apt/sources.list ]; then \
@@ -42,8 +41,17 @@ RUN for i in 1 2 3; do \
 # 复制依赖文件
 COPY requirements.txt .
 
-# 安装Python依赖
-RUN pip install --no-cache-dir -r requirements.txt
+# 安装Python依赖（使用多个镜像源备选）
+RUN pip install --no-cache-dir -r requirements.txt \
+    -i https://pypi.douban.com/simple/ \
+    --trusted-host pypi.douban.com || \
+    pip install --no-cache-dir -r requirements.txt \
+    -i https://mirrors.aliyun.com/pypi/simple/ \
+    --trusted-host mirrors.aliyun.com || \
+    pip install --no-cache-dir -r requirements.txt \
+    -i https://pypi.mirrors.ustc.edu.cn/simple/ \
+    --trusted-host pypi.mirrors.ustc.edu.cn || \
+    pip install --no-cache-dir -r requirements.txt
 
 # 复制应用代码
 COPY . .
