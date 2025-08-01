@@ -441,8 +441,9 @@ setup_directories() {
     mkdir -p logs/nginx
     mkdir -p ssl
     
-    # 设置权限
-    chmod 755 logs
+    # 设置权限 - 确保容器内的非root用户可以写入日志
+    chmod 777 logs
+    chmod 777 logs/nginx
     chmod 755 ssl
     
     log_success "目录创建完成"
