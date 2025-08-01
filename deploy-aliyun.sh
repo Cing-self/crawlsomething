@@ -2,6 +2,19 @@
 
 # 阿里云服务器部署脚本
 # GitHub Trending 爬虫 API 自动化部署
+# 
+# 功能特性：
+# - 支持 Ubuntu/Debian 和 CentOS/RHEL/AlibabaCloud Linux
+# - 自动配置国内Docker镜像源，解决拉取慢的问题
+# - 智能防火墙配置（UFW/Firewalld）
+# - 网络连通性测试
+# - 镜像预拉取，提高部署成功率
+# - SSL证书自动申请（可选）
+# - 完整的日志和错误处理
+#
+# 使用方法：
+# chmod +x deploy-aliyun.sh
+# ./deploy-aliyun.sh
 
 set -e  # 遇到错误立即退出
 
@@ -75,6 +88,43 @@ install_docker() {
     
     log_info "安装Docker..."
     
+    # 检测操作系统
+    if [[ -f /etc/os-release ]]; then
+        . /etc/os-release
+        OS=$ID
+    else
+        log_error "无法检测操作系统"
+        exit 1
+    fi
+    
+    case $OS in
+        ubuntu|debian)
+            install_docker_ubuntu
+            ;;
+        centos|rhel|alinux)
+            install_docker_centos
+            ;;
+        *)
+            log_error "不支持的操作系统: $OS"
+            exit 1
+            ;;
+    esac
+    
+    # 启动Docker服务
+    sudo systemctl start docker
+    sudo systemctl enable docker
+    
+    # 将当前用户添加到docker组
+    sudo usermod -aG docker $USER
+    
+    # 配置Docker国内镜像源
+    configure_docker_mirror
+    
+    log_success "Docker安装完成"
+}
+
+# Ubuntu/Debian系统安装Docker
+install_docker_ubuntu() {
     # 更新包管理器
     sudo apt-get update
     
@@ -86,24 +136,63 @@ install_docker() {
         gnupg \
         lsb-release
     
-    # 添加Docker官方GPG密钥
-    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+    # 使用阿里云Docker源（国内服务器友好）
+    curl -fsSL https://mirrors.aliyun.com/docker-ce/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
     
-    # 添加Docker仓库
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+    # 添加阿里云Docker仓库
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://mirrors.aliyun.com/docker-ce/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
     
     # 安装Docker Engine
     sudo apt-get update
     sudo apt-get install -y docker-ce docker-ce-cli containerd.io
+}
+
+# CentOS/RHEL/AlibabaCloud Linux系统安装Docker
+install_docker_centos() {
+    # 更新包管理器
+    sudo yum update -y
     
-    # 启动Docker服务
-    sudo systemctl start docker
-    sudo systemctl enable docker
+    # 安装必要的包
+    sudo yum install -y yum-utils device-mapper-persistent-data lvm2
     
-    # 将当前用户添加到docker组
-    sudo usermod -aG docker $USER
+    # 添加阿里云Docker仓库
+    sudo yum-config-manager --add-repo https://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo
     
-    log_success "Docker安装完成"
+    # 安装Docker Engine
+    sudo yum install -y docker-ce docker-ce-cli containerd.io
+}
+
+# 配置Docker国内镜像源
+configure_docker_mirror() {
+    log_info "配置Docker国内镜像源..."
+    
+    # 创建Docker配置目录
+    sudo mkdir -p /etc/docker
+    
+    # 配置镜像加速器（阿里云、腾讯云、网易云等）
+    sudo tee /etc/docker/daemon.json > /dev/null <<EOF
+{
+  "registry-mirrors": [
+    "https://docker.mirrors.ustc.edu.cn",
+    "https://hub-mirror.c.163.com",
+    "https://mirror.baidubce.com",
+    "https://ccr.ccs.tencentyun.com"
+  ],
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "100m",
+    "max-file": "3"
+  },
+  "storage-driver": "overlay2",
+  "exec-opts": ["native.cgroupdriver=systemd"]
+}
+EOF
+    
+    # 重启Docker服务使配置生效
+    sudo systemctl daemon-reload
+    sudo systemctl restart docker
+    
+    log_success "Docker镜像源配置完成"
 }
 
 # 安装Docker Compose
@@ -115,8 +204,31 @@ install_docker_compose() {
     
     log_info "安装Docker Compose..."
     
-    # 下载Docker Compose
-    sudo curl -L "https://github.com/docker/compose/releases/download/v2.20.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+    # 尝试从国内镜像下载Docker Compose
+    COMPOSE_VERSION="v2.20.0"
+    ARCH=$(uname -m)
+    OS=$(uname -s)
+    
+    # 国内镜像源列表
+    MIRRORS=(
+        "https://get.daocloud.io/docker/compose/releases/download"
+        "https://github.com/docker/compose/releases/download"
+    )
+    
+    for MIRROR in "${MIRRORS[@]}"; do
+        log_info "尝试从 $MIRROR 下载..."
+        if sudo curl -L "$MIRROR/$COMPOSE_VERSION/docker-compose-$OS-$ARCH" -o /usr/local/bin/docker-compose --connect-timeout 10; then
+            break
+        else
+            log_warning "从 $MIRROR 下载失败，尝试下一个源..."
+        fi
+    done
+    
+    # 检查下载是否成功
+    if [[ ! -f /usr/local/bin/docker-compose ]]; then
+        log_error "Docker Compose下载失败"
+        exit 1
+    fi
     
     # 添加执行权限
     sudo chmod +x /usr/local/bin/docker-compose
@@ -128,6 +240,27 @@ install_docker_compose() {
 setup_firewall() {
     log_info "配置防火墙..."
     
+    # 检测操作系统并配置相应的防火墙
+    if [[ -f /etc/os-release ]]; then
+        . /etc/os-release
+        OS=$ID
+    fi
+    
+    case $OS in
+        ubuntu|debian)
+            setup_ufw_firewall
+            ;;
+        centos|rhel|alinux)
+            setup_firewalld
+            ;;
+        *)
+            log_warning "未知操作系统，跳过防火墙配置"
+            ;;
+    esac
+}
+
+# Ubuntu/Debian系统防火墙配置
+setup_ufw_firewall() {
     # 检查ufw是否安装
     if ! command -v ufw &> /dev/null; then
         sudo apt-get install -y ufw
@@ -142,7 +275,63 @@ setup_firewall() {
     sudo ufw allow 443/tcp
     sudo ufw --force enable
     
-    log_success "防火墙配置完成"
+    log_success "UFW防火墙配置完成"
+}
+
+# CentOS/RHEL系统防火墙配置
+setup_firewalld() {
+    # 启动firewalld服务
+    sudo systemctl start firewalld
+    sudo systemctl enable firewalld
+    
+    # 配置防火墙规则
+    sudo firewall-cmd --permanent --add-service=ssh
+    sudo firewall-cmd --permanent --add-service=http
+    sudo firewall-cmd --permanent --add-service=https
+    sudo firewall-cmd --reload
+    
+    log_success "Firewalld防火墙配置完成"
+}
+
+# 测试网络连通性
+test_network() {
+    log_info "测试网络连通性..."
+    
+    # 测试国内镜像源连通性
+    MIRRORS=(
+        "docker.mirrors.ustc.edu.cn"
+        "hub-mirror.c.163.com"
+        "mirror.baidubce.com"
+    )
+    
+    for mirror in "${MIRRORS[@]}"; do
+        if curl -s --connect-timeout 5 "https://$mirror" > /dev/null; then
+            log_success "$mirror 连通正常"
+        else
+            log_warning "$mirror 连通失败"
+        fi
+    done
+}
+
+# 预拉取Docker镜像
+pre_pull_images() {
+    log_info "预拉取Docker镜像..."
+    
+    # 基础镜像列表
+    IMAGES=(
+        "python:3.9-slim"
+        "nginx:alpine"
+        "alpine:latest"
+    )
+    
+    for image in "${IMAGES[@]}"; do
+        log_info "拉取镜像: $image"
+        if docker pull "$image"; then
+            log_success "镜像 $image 拉取成功"
+        else
+            log_warning "镜像 $image 拉取失败，部署时将重试"
+        fi
+    done
 }
 
 # 创建必要目录
@@ -246,17 +435,34 @@ main() {
     log_info "开始阿里云服务器部署..."
     echo
     
+    # 基础环境检查和安装
     check_root
     check_system
+    
+    # 网络连通性测试
+    test_network
+    
+    # Docker环境安装
     install_docker
     install_docker_compose
+    
+    # 预拉取镜像（提高部署成功率）
+    pre_pull_images
+    
+    # 系统配置
     setup_firewall
     setup_directories
+    
+    # SSL证书配置（可选）
     setup_ssl
+    
+    # 应用部署
     deploy_app
+    
+    # 显示部署信息
     show_info
     
-    log_success "部署完成！"
+    log_success "🎉 阿里云部署完成！"
 }
 
 # 执行主函数
