@@ -236,6 +236,7 @@ docker-compose up -d
 > - 请在 PowerShell 或 Git Bash 中运行上述命令
 > - 确保 Docker Desktop 正在运行
 > - 首次运行可能需要较长时间下载镜像
+> - 如果遇到 `No such file or directory` 错误，说明镜像源配置问题，已在最新版本修复
 
 3. **查看服务状态**
 ```bash

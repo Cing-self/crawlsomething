@@ -13,9 +13,15 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
 
-# 更换为阿里云镜像源以提高下载速度
-RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list && \
-    sed -i 's/security.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list
+# 更换为阿里云镜像源以提高下载速度（兼容新版Debian）
+RUN if [ -f /etc/apt/sources.list ]; then \
+        sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list && \
+        sed -i 's/security.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list; \
+    fi && \
+    if [ -d /etc/apt/sources.list.d ]; then \
+        find /etc/apt/sources.list.d -name "*.list" -exec sed -i 's/deb.debian.org/mirrors.aliyun.com/g' {} \; && \
+        find /etc/apt/sources.list.d -name "*.list" -exec sed -i 's/security.debian.org/mirrors.aliyun.com/g' {} \; ; \
+    fi
 
 # 安装系统依赖
 RUN apt-get update && apt-get install -y \
