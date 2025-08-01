@@ -53,27 +53,219 @@ crawlsomething/
 └── README.md
 ```
 
-## 快速开始
+## 部署指南
 
-1. 安装依赖
+### 本地部署
+
+#### 方式一：直接运行
+
+**系统要求**
+- Python 3.8+
+- Git
+
+**环境准备**
+
+<details>
+<summary>Windows 系统</summary>
+
+1. **安装 Python**
+   - 访问 [Python官网](https://www.python.org/downloads/) 下载最新版本
+   - 安装时勾选 "Add Python to PATH"
+   - 验证安装：
+   ```cmd
+   python --version
+   pip --version
+   ```
+
+2. **安装 Git**
+   - 访问 [Git官网](https://git-scm.com/download/win) 下载安装包
+   - 使用默认配置安装
+   - 验证安装：
+   ```cmd
+   git --version
+   ```
+
+</details>
+
+<details>
+<summary>Linux/macOS 系统</summary>
+
+```bash
+# Ubuntu/Debian
+sudo apt update
+sudo apt install python3 python3-pip git
+
+# CentOS/RHEL
+sudo yum install python3 python3-pip git
+
+# macOS (使用 Homebrew)
+brew install python git
+```
+
+</details>
+
+**部署步骤**
+
+1. **克隆项目**
+```bash
+git clone <repository-url>
+cd crawlsomething
+```
+
+2. **创建虚拟环境**
+```bash
+# Linux/macOS
+python3 -m venv venv
+source venv/bin/activate
+
+# Windows
+python -m venv venv
+venv\Scripts\activate
+```
+
+3. **安装依赖**
 ```bash
 pip install -r requirements.txt
 ```
 
-2. 配置环境变量
+4. **配置环境变量**
 ```bash
+# Linux/macOS
 cp .env.example .env
-# 编辑 .env 文件
+
+# Windows
+copy .env.example .env
 ```
 
-3. 启动服务
+5. **启动服务**
 ```bash
 uvicorn app.main:app --reload
 ```
 
-4. 访问API文档
+6. **访问服务**
+- API服务：http://localhost:8000
+- API文档：http://localhost:8000/docs
+
+#### 方式二：Docker 容器
+
+**系统要求**
+- Docker
+- Docker Compose
+
+**Docker 安装**
+
+<details>
+<summary>Windows 系统</summary>
+
+1. **系统要求**
+   - Windows 10 64位：专业版、企业版或教育版（版本1903或更高）
+   - Windows 11 64位：家庭版或专业版
+   - 启用 WSL 2 功能
+
+2. **启用 WSL 2**
+   ```powershell
+   # 以管理员身份运行 PowerShell
+   dism.exe /online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart
+   dism.exe /online /enable-feature /featurename:VirtualMachinePlatform /all /norestart
+   
+   # 重启计算机后，设置 WSL 2 为默认版本
+   wsl --set-default-version 2
+   ```
+
+3. **安装 Docker Desktop**
+   - 访问 [Docker Desktop官网](https://www.docker.com/products/docker-desktop) 下载
+   - 运行安装程序，使用默认设置
+   - 安装完成后重启计算机
+   - 启动 Docker Desktop 并完成初始配置
+
+4. **验证安装**
+   ```cmd
+   docker --version
+   docker-compose --version
+   ```
+
+</details>
+
+<details>
+<summary>Linux 系统</summary>
+
+```bash
+# Ubuntu/Debian
+sudo apt update
+sudo apt install docker.io docker-compose
+sudo systemctl start docker
+sudo systemctl enable docker
+sudo usermod -aG docker $USER
+
+# CentOS/RHEL
+sudo yum install docker docker-compose
+sudo systemctl start docker
+sudo systemctl enable docker
+sudo usermod -aG docker $USER
 ```
-http://localhost:8000/docs
+
+</details>
+
+<details>
+<summary>macOS 系统</summary>
+
+```bash
+# 使用 Homebrew
+brew install --cask docker
+
+# 或者下载 Docker Desktop for Mac
+# https://www.docker.com/products/docker-desktop
+```
+
+</details>
+
+**部署步骤**
+
+1. **克隆项目**
+```bash
+git clone <repository-url>
+cd crawlsomething
+```
+
+2. **启动服务**
+```bash
+docker-compose up -d
+```
+
+> **Windows 用户提示**：
+> - 请在 PowerShell 或 Git Bash 中运行上述命令
+> - 确保 Docker Desktop 正在运行
+> - 首次运行可能需要较长时间下载镜像
+
+3. **查看服务状态**
+```bash
+docker-compose ps
+```
+
+4. **查看日志**
+```bash
+docker-compose logs -f
+```
+
+**访问地址**
+- API服务：http://localhost:8000
+- Nginx代理：http://localhost:80
+- API文档：http://localhost:8000/docs
+
+**常用命令**
+```bash
+# 停止服务
+docker-compose down
+
+# 重启服务
+docker-compose restart
+
+# 更新服务
+docker-compose pull
+docker-compose up -d
+
+# 查看日志
+docker-compose logs -f [service_name]
 ```
 
 ## API接口
@@ -91,9 +283,40 @@ http://localhost:8000/docs
 - `limit`: 返回数量限制
 - `offset`: 分页偏移
 
-## 部署
+### 云端部署
 
-支持Docker部署，详见项目中的Dockerfile和docker-compose.yml文件。
+#### 阿里云一键部署
+
+**系统要求**
+- 阿里云ECS实例（推荐配置：2核4GB内存）
+- CentOS 7+ 或 Ubuntu 18.04+
+- 已安装Docker和Docker Compose
+
+**特色功能**
+- 🚀 一键部署脚本，自动配置环境
+- 🔧 自动安装Docker和依赖
+- 🌐 自动配置Nginx反向代理
+- 🔒 SSL证书自动申请和配置
+- 📊 系统监控和日志管理
+- 🔄 自动备份和更新机制
+
+**一键部署**
+```bash
+# 下载并运行部署脚本
+wget -O deploy.sh https://raw.githubusercontent.com/your-repo/crawlsomething/main/deploy-aliyun.sh
+chmod +x deploy.sh
+sudo ./deploy.sh
+```
+
+部署脚本将自动完成以下操作：
+1. 检查系统环境和依赖
+2. 安装Docker和Docker Compose
+3. 克隆项目代码
+4. 配置环境变量
+5. 启动服务容器
+6. 配置Nginx反向代理
+7. 设置防火墙规则
+8. 配置系统服务自启动
 
 ## 许可证
 
