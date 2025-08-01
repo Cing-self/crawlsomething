@@ -5,6 +5,7 @@
 # 
 # 功能特性：
 # - 支持 Ubuntu/Debian 和 CentOS/RHEL/AlibabaCloud Linux
+# - 智能检测Docker/Docker Compose安装状态，避免重复安装
 # - 自动配置国内Docker镜像源，解决拉取慢的问题
 # - 智能防火墙配置（UFW/Firewalld）
 # - 网络连通性测试
@@ -79,14 +80,65 @@ check_system() {
     log_success "系统环境检查完成"
 }
 
+# 检查Docker是否已安装并正常运行
+check_docker_installation() {
+    log_info "检查Docker安装状态..."
+    
+    # 检查Docker命令是否存在
+    if ! command -v docker &> /dev/null; then
+        log_info "Docker未安装，需要安装"
+        return 1
+    fi
+    
+    # 检查Docker版本
+    DOCKER_VERSION=$(docker --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+    if [[ -z "$DOCKER_VERSION" ]]; then
+        log_warning "无法获取Docker版本信息"
+        return 1
+    fi
+    
+    log_info "检测到Docker版本: $DOCKER_VERSION"
+    
+    # 检查Docker服务状态
+    if ! sudo systemctl is-active --quiet docker; then
+        log_info "Docker服务未运行，尝试启动..."
+        if sudo systemctl start docker; then
+            log_success "Docker服务启动成功"
+        else
+            log_error "Docker服务启动失败"
+            return 1
+        fi
+    else
+        log_info "Docker服务正在运行"
+    fi
+    
+    # 检查Docker是否可以正常工作
+    if sudo docker info &> /dev/null; then
+        log_success "Docker安装正常，跳过安装步骤"
+        
+        # 检查是否配置了国内镜像源
+        if ! sudo docker info 2>/dev/null | grep -q "Registry Mirrors"; then
+            log_info "检测到Docker未配置国内镜像源，正在配置..."
+            configure_docker_mirror
+        else
+            log_info "Docker镜像源已配置"
+        fi
+        
+        return 0
+    else
+        log_warning "Docker安装存在问题，需要重新安装"
+        return 1
+    fi
+}
+
 # 安装Docker
 install_docker() {
-    if command -v docker &> /dev/null; then
-        log_info "Docker已安装，版本: $(docker --version)"
+    # 首先检查Docker是否已安装并正常工作
+    if check_docker_installation; then
         return
     fi
     
-    log_info "安装Docker..."
+    log_info "开始安装Docker..."
     
     # 检测操作系统
     if [[ -f /etc/os-release ]]; then
@@ -195,14 +247,40 @@ EOF
     log_success "Docker镜像源配置完成"
 }
 
+# 检查Docker Compose是否已安装并正常运行
+check_docker_compose_installation() {
+    log_info "检查Docker Compose安装状态..."
+    
+    # 检查docker-compose命令是否存在
+    if command -v docker-compose &> /dev/null; then
+        COMPOSE_VERSION=$(docker-compose --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+        if [[ -n "$COMPOSE_VERSION" ]]; then
+            log_success "Docker Compose已安装，版本: $COMPOSE_VERSION"
+            return 0
+        fi
+    fi
+    
+    # 检查docker compose命令（Docker Compose V2）
+    if docker compose version &> /dev/null; then
+        COMPOSE_VERSION=$(docker compose version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+        if [[ -n "$COMPOSE_VERSION" ]]; then
+            log_success "Docker Compose V2已安装，版本: $COMPOSE_VERSION"
+            return 0
+        fi
+    fi
+    
+    log_info "Docker Compose未安装，需要安装"
+    return 1
+}
+
 # 安装Docker Compose
 install_docker_compose() {
-    if command -v docker-compose &> /dev/null; then
-        log_info "Docker Compose已安装，版本: $(docker-compose --version)"
+    # 首先检查Docker Compose是否已安装
+    if check_docker_compose_installation; then
         return
     fi
     
-    log_info "安装Docker Compose..."
+    log_info "开始安装Docker Compose..."
     
     # 尝试从国内镜像下载Docker Compose
     COMPOSE_VERSION="v2.20.0"
