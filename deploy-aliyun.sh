@@ -339,21 +339,43 @@ setup_firewall() {
 
 # Ubuntu/Debian系统防火墙配置
 setup_ufw_firewall() {
-    # 检查ufw是否安装
-    if ! command -v ufw &> /dev/null; then
-        sudo apt-get install -y ufw
+    # 检测操作系统并使用相应的防火墙工具
+    if [[ -f /etc/os-release ]]; then
+        . /etc/os-release
+        OS=$ID
+    else
+        log_error "无法检测操作系统"
+        return
     fi
     
-    # 配置防火墙规则
-    sudo ufw --force reset
-    sudo ufw default deny incoming
-    sudo ufw default allow outgoing
-    sudo ufw allow ssh
-    sudo ufw allow 80/tcp
-    sudo ufw allow 443/tcp
-    sudo ufw --force enable
-    
-    log_success "UFW防火墙配置完成"
+    case $OS in
+        ubuntu|debian)
+            # Ubuntu/Debian系统使用UFW
+            if ! command -v ufw &> /dev/null; then
+                sudo apt-get update
+                sudo apt-get install -y ufw
+            fi
+            
+            # 配置UFW防火墙规则
+            sudo ufw --force reset
+            sudo ufw default deny incoming
+            sudo ufw default allow outgoing
+            sudo ufw allow ssh
+            sudo ufw allow 80/tcp
+            sudo ufw allow 443/tcp
+            sudo ufw --force enable
+            
+            log_success "UFW防火墙配置完成"
+            ;;
+        centos|rhel|alinux)
+            # CentOS/RHEL/AlibabaCloud Linux使用firewalld
+            setup_firewalld
+            ;;
+        *)
+            log_warning "不支持的操作系统: $OS，请手动配置防火墙"
+            log_info "请确保开放以下端口：22(SSH), 80(HTTP), 443(HTTPS)"
+            ;;
+    esac
 }
 
 # CentOS/RHEL系统防火墙配置
@@ -444,7 +466,41 @@ setup_ssl() {
     fi
     
     log_info "安装Certbot..."
-    sudo apt-get install -y certbot
+    
+    # 检测操作系统并使用相应的包管理器
+    if [[ -f /etc/os-release ]]; then
+        . /etc/os-release
+        OS=$ID
+    else
+        log_error "无法检测操作系统"
+        return
+    fi
+    
+    case $OS in
+        ubuntu|debian)
+            sudo apt-get update
+            sudo apt-get install -y certbot
+            ;;
+        centos|rhel|alinux)
+            # CentOS/RHEL/AlibabaCloud Linux
+            if command -v dnf &> /dev/null; then
+                sudo dnf install -y certbot
+            elif command -v yum &> /dev/null; then
+                # 先安装EPEL仓库（如果需要）
+                if ! rpm -qa | grep -q epel-release; then
+                    sudo yum install -y epel-release
+                fi
+                sudo yum install -y certbot
+            else
+                log_error "找不到可用的包管理器"
+                return
+            fi
+            ;;
+        *)
+            log_error "不支持的操作系统: $OS，请手动安装certbot"
+            return
+            ;;
+    esac
     
     log_info "申请SSL证书..."
     sudo certbot certonly --standalone -d $DOMAIN --email $EMAIL --agree-tos --non-interactive
