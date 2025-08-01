@@ -522,18 +522,18 @@ deploy_app() {
     
     # 停止现有服务
     if [[ -f docker-compose.prod.yml ]]; then
-        if command -v docker-compose &> /dev/null; then
-            docker-compose -f docker-compose.prod.yml down 2>/dev/null || true
-        else
+        if docker compose version &> /dev/null; then
             docker compose -f docker-compose.prod.yml down 2>/dev/null || true
+        elif command -v docker-compose &> /dev/null; then
+            docker-compose -f docker-compose.prod.yml down 2>/dev/null || true
         fi
     fi
     
     # 构建并启动服务
-    if command -v docker-compose &> /dev/null; then
-        docker-compose -f docker-compose.prod.yml up -d --build
-    else
+    if docker compose version &> /dev/null; then
         docker compose -f docker-compose.prod.yml up -d --build
+    elif command -v docker-compose &> /dev/null; then
+        docker-compose -f docker-compose.prod.yml up -d --build
     fi
     
     # 等待服务启动
@@ -541,15 +541,24 @@ deploy_app() {
     sleep 30
     
     # 检查服务状态
-    if (command -v docker-compose &> /dev/null && docker-compose -f docker-compose.prod.yml ps | grep -q "Up") || (docker compose -f docker-compose.prod.yml ps | grep -q "Up"); then
-        log_success "应用部署成功"
-    else
-        log_error "应用部署失败，请检查日志"
-        if command -v docker-compose &> /dev/null; then
-            docker-compose -f docker-compose.prod.yml logs
+    if docker compose version &> /dev/null; then
+        if docker compose -f docker-compose.prod.yml ps | grep -q "Up"; then
+            log_success "应用部署成功"
         else
+            log_error "应用部署失败，请检查日志"
             docker compose -f docker-compose.prod.yml logs
+            exit 1
         fi
+    elif command -v docker-compose &> /dev/null; then
+        if docker-compose -f docker-compose.prod.yml ps | grep -q "Up"; then
+            log_success "应用部署成功"
+        else
+            log_error "应用部署失败，请检查日志"
+            docker-compose -f docker-compose.prod.yml logs
+            exit 1
+        fi
+    else
+        log_error "未找到可用的Docker Compose命令"
         exit 1
     fi
 }
@@ -559,10 +568,10 @@ show_info() {
     log_success "=== 部署完成 ==="
     echo
     log_info "服务状态:"
-    if command -v docker-compose &> /dev/null; then
-        docker-compose -f docker-compose.prod.yml ps
-    else
+    if docker compose version &> /dev/null; then
         docker compose -f docker-compose.prod.yml ps
+    elif command -v docker-compose &> /dev/null; then
+        docker-compose -f docker-compose.prod.yml ps
     fi
     echo
     log_info "访问地址:"
