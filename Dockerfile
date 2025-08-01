@@ -29,15 +29,18 @@ COPY requirements.txt .
 # 安装Python依赖
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 预先创建日志目录
-RUN mkdir -p /app/logs
-
 # 复制应用代码
 COPY . .
 
-# 创建非root用户并设置所有权限
-RUN useradd --create-home --shell /bin/bash app \
-    && chown -R app:app /app
+# 创建非root用户
+RUN useradd --create-home --shell /bin/bash app
+
+# 创建日志目录并设置权限（确保在用户创建后）
+RUN mkdir -p /app/logs \
+    && chown -R app:app /app \
+    && chmod -R 755 /app/logs
+
+# 切换到非root用户
 USER app
 
 # 暴露端口
